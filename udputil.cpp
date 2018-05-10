@@ -58,7 +58,7 @@ char *getSocketError(int err)
     return &msgbuf[0];
 }
 
-int DatagramServer(short nServerPort)
+int DatagramServer(unsigned short nServerPort)
 {
     UINT uiPacketNumber = 0;
     TDatagram datagram = { NULL };
@@ -136,7 +136,7 @@ int DatagramServer(short nServerPort)
     return 0;
 }
 
-bool SendDatagram(const char *pszHostAddr, short nPort, bool bBroadcast, const TDatagram *pData)
+bool SendDatagram(const char *pszHostAddr, unsigned short nPort, bool bBroadcast, const TDatagram *pData)
 {
     bool bRetval = false;
     SOCKET s = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -204,13 +204,13 @@ BOOL __stdcall CtrlHandler(DWORD fdwCtrlType)
     }
 }
 
-short getPortNumber(const char *port)
+unsigned short getPortNumber(const char *port)
 {
     if (atoi(port) <= 0) {
         std::cerr << port << (" is an invalid port number.  Port must be a positive integer between 1 and ") << USHRT_MAX << (".") << std::endl;
         exit(1);
     }
-    return static_cast<short>(atoi(port));
+    return static_cast<unsigned short>(atoi(port));
 }
 
 char *getApplicationName(char *arg)
@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
 
     bool bBroadcast = false;
-    short nPort = 0;
+    unsigned short nPort = 0;
 
     if (argc < 2) {
         std::cerr << szAppName << (" - UDP Datagram Utility (C) 2018 MLinks Technologies, Inc.") << std::endl;
