@@ -172,8 +172,8 @@ int DatagramServer(unsigned short nServerPort)
         if (FD_ISSET(ServerSocket, &rfds)) {
             int r = recvfrom(ServerSocket, (char *)&datagram, sizeof(TDatagram), 0, (sockaddr *)&fin, &fromlen);
             if ((r > 0) && (r != sizeof(TDatagram))) {
-                std::cerr << ("Received invalid datagram!  The ") << r << (" raw bytes follows:") << std::endl;
-                std::cout << FormatData("RAW:", reinterpret_cast<char*>(&datagram), r, nScreenCols);
+                std::cerr << ("Received ") << r << (" bytes of unknown datagram.") << std::endl;
+                std::cout << FormatData("PAYLOAD:", reinterpret_cast<char*>(&datagram), r, nScreenCols);
                 continue;
             } else if (r == sizeof(TDatagram)) {
                 uiPacketNumber++;
@@ -197,7 +197,7 @@ int DatagramServer(unsigned short nServerPort)
     return 0;
 }
 
-bool SendDatagram(const char *pszHostAddr, unsigned short nPort, bool bBroadcast, const TDatagram *pData)
+bool SendDatagram(const char *pszHostAddr, unsigned short nPort, bool bBroadcast, void *pData, size_t datalen)
 {
     bool bRetval = false;
     SOCKET s = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -211,7 +211,7 @@ bool SendDatagram(const char *pszHostAddr, unsigned short nPort, bool bBroadcast
         sin.sin_family = PF_INET;
         sin.sin_port = htons(nPort);
         sin.sin_addr.s_addr = bBroadcast ? INADDR_BROADCAST : inet_addr(pszHostAddr);
-        if (sendto(s, (char *)pData, sizeof(TDatagram), 0, (sockaddr *)&sin, sizeof(sin)) > 0) {
+        if (sendto(s, reinterpret_cast<char*>(pData), datalen, 0, (sockaddr *)&sin, sizeof(sin)) > 0) {
             bRetval = true;
         } else {
             int error = WSAGetLastError();
@@ -298,6 +298,7 @@ int main(int argc, char *argv[])
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
 
     bool bBroadcast = false;
+    bool bRaw = false;
     unsigned short nPort = 0;
 
     if (argc < 2) {
@@ -307,8 +308,9 @@ int main(int argc, char *argv[])
         std::cerr << ("    ") << szAppName << (" [options] ipaddr port \"payload\" counter") << std::endl;
         std::cerr << std::endl << (" Where [options] can be one of the following:") << std::endl;
         std::cerr << ("     -b       Send broadcast datagram on 'port'.") << std::endl;
-        std::cerr << ("     -s       Start Datagram SERVER on 'port'.") << std::endl;
         std::cerr << ("     -q       Send QUIT datagram.") << std::endl;
+        std::cerr << ("     -r       Send RAW datagram.") << std::endl;
+        std::cerr << ("     -s       Start Datagram SERVER on 'port'.") << std::endl;
         std::cerr << std::endl;
         return 1;
     }
@@ -333,6 +335,9 @@ int main(int argc, char *argv[])
     } else if (_stricmp(argv[argnum], "-q") == 0) {
         argnum++;
         dg.Quit = 1;
+    } else if (_stricmp(argv[argnum], "-r") == 0) {
+        argnum++;
+        bRaw = true;
     }
 
 
@@ -355,9 +360,10 @@ int main(int argc, char *argv[])
         WSACleanup();
         return 1;
     }
+    char *pRawPacket = argv[argnum];
     strcpy(dg.Payload, argv[argnum++]);
 
-    if (argc >= argnum+1) {
+    if (!bRaw && argc >= argnum+1) {
         dg.Counter = static_cast<short>(atoi(argv[argnum++]));
     }
 
@@ -368,7 +374,14 @@ int main(int argc, char *argv[])
     //strcpy(dg.Computername, host->h_name);
 
     GetHostName(&dg);
-    if (SendDatagram(target, nPort, bBroadcast, &dg)) {
+    bool bRet = false;
+    if (bRaw) {
+        bRet = SendDatagram(target, nPort, bBroadcast, pRawPacket, strlen(pRawPacket));
+    } else {
+        bRet = SendDatagram(target, nPort, bBroadcast, &dg, sizeof(TDatagram));
+    }
+
+    if (bRet) {
         std::cout << ("Datagram ") << (bBroadcast ? ("broadcast") : ("sent")) << (" succcessfully.") << std::endl;
     }
     WSACleanup();
