@@ -12,8 +12,10 @@
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #define _CRT_SECURE_NO_WARNINGS _CRT_SECURE_NO_WARNINGS
+#include <cctype>
 #include <iostream>
 #include <string>
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -32,6 +34,28 @@
 SOCKET  ServerSocket    = INVALID_SOCKET;
 bool    bShutdown       = false;
 char    *szAppName      = NULL;
+short   nScreenCols     = 0;
+
+enum DisplayModes {
+    None,
+    ASCII,
+    VerboseASCII,
+    Hex,
+    UpperHex,
+    Decimal,
+    Raw,
+    MAX_TYPES,
+} DISPLAY_MODES;
+
+                                     // None     // ASCII    // Verbose ASCII   // Hex      //UpperHex      // Decimal      // Raw
+static const char *FORMAT_STR[] = {  "%c",       "%c",       "%s",             "%02x ",    "%02X ",        "%03d ",        "%c"    };
+static const char *DATA_WIDTHS[] ={  " ",        " ",        "",               "   ",      "   ",          "    ",         " "     };
+static const char *ASCII_DESC[] = {
+    "NUL", "SOH", "STX", "ETX", "EOT", "ENQ", "ACK", "BEL",
+    "BS ", "HT ", "LF ", "VT ", "FF ", "CR ", "SOH", "SI ",
+    "DLE", "DC1", "DC2", "DC3", "DC4", "NAK", "SYN", "ETB",
+    "CAN", "EM ", "SUB", "ESC", "FS ", "GS ", "RS ", "US ",
+};
 
 typedef struct tagTDatagram {
     char Computername[MAX_COMPUTERNAME_LENGTH + 1];
@@ -56,6 +80,42 @@ char *getSocketError(int err)
        sprintf(msgbuf, "(No Error Text) - %d", err);
     }
     return &msgbuf[0];
+}
+
+std::string FormatData(const char *pszDirSym, const char *Buff, size_t nBuffLen, size_t nCX)
+{
+    std::string sRetval = "";
+    size_t nCols = nCX;
+    size_t nRowCol = 0;
+    char *rowStr = new char[6];
+
+    nCols = (((nCX - strlen(pszDirSym)) - 1) / 4);
+
+    for (size_t y = 0; y < ((nBuffLen / nCols) + 1); y++) {
+        sRetval += pszDirSym;
+        std::string sRaw;
+        std::string sVals;
+        for (size_t x = 0; x < nCols; x++, nRowCol++) {
+            if (nRowCol >= nBuffLen) {
+                // We ran out of data, so just print spaces.
+                sVals += DATA_WIDTHS[UpperHex];
+                continue;
+            }
+            // First, build the NUMERICAL part of the string.
+            _snprintf_s(rowStr, 5, 5, FORMAT_STR[UpperHex], (Buff[nRowCol] & 0xFF));
+            sVals += rowStr;
+            // Then the actual ASCII part
+            if ((std::isgraph(Buff[nRowCol] & 0xFF) || (Buff[nRowCol] & 0xFF) == 0x20)) {
+                _snprintf_s(rowStr, 2, 2, "%c", (Buff[nRowCol] & 0xFF));
+                sRaw += rowStr;
+            } else if ((Buff[nRowCol] & 0xFF) > 0x7F) {
+                sRaw += ".";
+            }
+        }
+        sRetval += sVals;
+        sRetval += sRaw + "\n";
+    }
+    return sRetval;
 }
 
 int DatagramServer(unsigned short nServerPort)
@@ -112,7 +172,8 @@ int DatagramServer(unsigned short nServerPort)
         if (FD_ISSET(ServerSocket, &rfds)) {
             int r = recvfrom(ServerSocket, (char *)&datagram, sizeof(TDatagram), 0, (sockaddr *)&fin, &fromlen);
             if ((r > 0) && (r != sizeof(TDatagram))) {
-                std::cerr << ("Received invalid datagram!  The ") << r << (" bytes received, will be ignored.") << std::endl;
+                std::cerr << ("Received invalid datagram!  The ") << r << (" raw bytes follows:") << std::endl;
+                std::cout << FormatData("RAW:", reinterpret_cast<char*>(&datagram), r, nScreenCols);
                 continue;
             } else if (r == sizeof(TDatagram)) {
                 uiPacketNumber++;
@@ -229,6 +290,10 @@ char *getApplicationName(char *arg)
 
 int main(int argc, char *argv[])
 {
+    CONSOLE_SCREEN_BUFFER_INFO   csbi;  // used to get Screen Window size.
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    nScreenCols = csbi.dwMaximumWindowSize.X;
+
     szAppName = getApplicationName(argv[0]);
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
 
