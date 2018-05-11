@@ -12,23 +12,46 @@
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #define _CRT_SECURE_NO_WARNINGS _CRT_SECURE_NO_WARNINGS
-#include <cctype>
-#include <iostream>
-#include <string>
-
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "winsock.h"
+#include <cctype>
+#include <cstring>
+#include <iostream>
+#include <string>
 
+#ifdef _WIN32
+#include <winsock.h>
+typedef int socklen_t;
+#pragma warning(disable: 4127) // incompatible with FD_SET()
+#define MAX_COMPUTERNAME    MAX_COMPUTERNAME_LENGTH
 #pragma comment(lib, "ws2_32.lib")
+#else
+#include <netdb.h>
+#include <signal.h>
+#include <unistd.h>
+
+#include <arpa/inet.h>
+#include <sys/ioctl.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+typedef unsigned int socklen_t;
+typedef int SOCKET;
+const int INVALID_SOCKET = -1;
+inline void closesocket(int x) { close(x); }
+#define WSAGetLastError()   errno
+#define WSACleanup()
+#define MAX_COMPUTERNAME    15
+#endif
 
 #ifndef  SD_BOTH
 #define SD_BOTH         0x02
 #endif
 
-#define VERSION_INFO            1.1
+#define VERSION_INFO            1.5
 #define MAX_DATAGRAM_MESSAGE    512
 
 SOCKET  ServerSocket    = INVALID_SOCKET;
@@ -58,7 +81,7 @@ static const char *ASCII_DESC[] = {
 };
 
 typedef struct tagTDatagram {
-    char Computername[MAX_COMPUTERNAME_LENGTH + 1];
+    char Computername[MAX_COMPUTERNAME + 1];
     char Payload[MAX_DATAGRAM_MESSAGE + 1];
     short Counter;
     short Quit;
@@ -67,7 +90,7 @@ typedef struct tagTDatagram {
 char *getSocketError(int err)
 {
     static char msgbuf[256] = { '\0' };
-
+#ifdef _MSC_VER
     FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                   NULL,
                   err,
@@ -75,7 +98,9 @@ char *getSocketError(int err)
                   msgbuf,
                   sizeof(msgbuf),
                   NULL);
-
+#else
+    sprintf(&msgbuf[0], "%s.\n", strerror(err));
+#endif
     if (!*msgbuf) {
        sprintf(msgbuf, "(No Error Text) - %d", err);
     }
@@ -102,11 +127,11 @@ std::string FormatData(const char *pszDirSym, const char *Buff, size_t nBuffLen,
                 continue;
             }
             // First, build the NUMERICAL part of the string.
-            _snprintf_s(rowStr, 5, 5, FORMAT_STR[UpperHex], (Buff[nRowCol] & 0xFF));
+            snprintf(rowStr, 5, FORMAT_STR[UpperHex], (Buff[nRowCol] & 0xFF));
             sVals += rowStr;
             // Then the actual ASCII part
             if ((std::isgraph(Buff[nRowCol] & 0xFF) || (Buff[nRowCol] & 0xFF) == 0x20)) {
-                _snprintf_s(rowStr, 2, 2, "%c", (Buff[nRowCol] & 0xFF));
+                snprintf(rowStr, 2, "%c", (Buff[nRowCol] & 0xFF));
                 sRaw += rowStr;
             } else if ((Buff[nRowCol] & 0xFF) > 0x7F) {
                 sRaw += ".";
@@ -120,8 +145,8 @@ std::string FormatData(const char *pszDirSym, const char *Buff, size_t nBuffLen,
 
 int DatagramServer(unsigned short nServerPort)
 {
-    UINT uiPacketNumber = 0;
-    TDatagram datagram = { NULL };
+    uint32_t uiPacketNumber = 0;
+    TDatagram datagram;
 
     ServerSocket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (ServerSocket == INVALID_SOCKET) {
@@ -130,7 +155,7 @@ int DatagramServer(unsigned short nServerPort)
         return 1;
     }
     sockaddr_in sin;
-    ZeroMemory(&sin, sizeof(sin));
+    memset(&sin, 0x00, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(nServerPort);
     sin.sin_addr.s_addr = INADDR_ANY;
@@ -141,9 +166,10 @@ int DatagramServer(unsigned short nServerPort)
     }
 
     while (!bShutdown) {
+        memset(&datagram, 0x00, sizeof(TDatagram));
         int nfs = 0;
         sockaddr_in fin;
-        int fromlen = sizeof(fin);
+        socklen_t fromlen = sizeof(fin);
         fd_set rfds;
         fd_set efds;
         FD_ZERO(&rfds);
@@ -203,9 +229,9 @@ bool SendDatagram(const char *pszHostAddr, unsigned short nPort, bool bBroadcast
     SOCKET s = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (s != INVALID_SOCKET) {
         sockaddr_in sin;
-        ZeroMemory(&sin, sizeof(sin));
+        memset(&sin, 0x00, sizeof(sin));
         if (bBroadcast) {
-            BOOL tru = TRUE;
+            uint32_t tru = 1;
             setsockopt(s, SOL_SOCKET, SO_BROADCAST, (char *)&tru, sizeof(tru));
         }
         sin.sin_family = PF_INET;
@@ -224,12 +250,17 @@ bool SendDatagram(const char *pszHostAddr, unsigned short nPort, bool bBroadcast
 
 void GetHostName(TDatagram *pDatagram)
 {
+#ifdef _MSVC_VER
     TCHAR ComputerName[MAX_COMPUTERNAME_LENGTH + 1];
     ZeroMemory(ComputerName, sizeof(ComputerName));
     DWORD len = MAX_COMPUTERNAME_LENGTH;
     GetComputerName(pDatagram->Computername, &len);
+#else
+    gethostname(pDatagram->Computername, MAX_COMPUTERNAME);
+#endif
 }
 
+#ifdef _MSC_VER
 BOOL __stdcall CtrlHandler(DWORD fdwCtrlType)
 {
     switch (fdwCtrlType) {
@@ -262,6 +293,32 @@ BOOL __stdcall CtrlHandler(DWORD fdwCtrlType)
             return FALSE;   //Break out of the app, non-gracefully.
         default:
             return FALSE;
+#else
+void CtrlHandler(int sig)
+{
+    switch (sig) {
+        case SIGQUIT:
+            std::cerr << std::endl << ("**** Dumping core...") << std::endl;
+            break;
+        case SIGTERM:
+            bShutdown = true;
+            std::cerr << std::endl << ("**** Closing application, shutting down Datagram listener...") << std::endl;
+            shutdown(ServerSocket, SD_BOTH);
+            closesocket(ServerSocket);
+            break;
+        case SIGINT:
+            bShutdown = true;
+            std::cerr << std::endl << ("***** Shutting down Datagram listener...") << std::endl;
+            shutdown(ServerSocket, SD_BOTH);
+            closesocket(ServerSocket);
+            break;
+        case SIGHUP:
+            bShutdown = true;
+            std::cerr << std::endl << ("**** Connection to user lost, or user logoff event occurred, shutting down Datagram listener.") << std::endl;
+            shutdown(ServerSocket, SD_BOTH);
+            closesocket(ServerSocket);
+            break;
+#endif
     }
 }
 
@@ -290,13 +347,23 @@ char *getApplicationName(char *arg)
 
 int main(int argc, char *argv[])
 {
+    szAppName = getApplicationName(argv[0]);
+#ifdef _MSC_VER
     CONSOLE_SCREEN_BUFFER_INFO   csbi;  // used to get Screen Window size.
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
     nScreenCols = csbi.dwMaximumWindowSize.X;
-
-    szAppName = getApplicationName(argv[0]);
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
-
+    WSAData wsaData;
+    WSAStartup(MAKEWORD(1, 1), &wsaData);
+#else
+    struct winsize w;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+    nScreenCols = w.ws_col;
+    signal(SIGINT,  CtrlHandler);
+    signal(SIGQUIT, CtrlHandler);
+    signal(SIGTERM, CtrlHandler);
+    signal(SIGHUP,  CtrlHandler);
+#endif
     bool bBroadcast = false;
     bool bRaw = false;
     unsigned short nPort = 0;
@@ -316,13 +383,12 @@ int main(int argc, char *argv[])
     }
 
     int argnum = 1;
-    WSAData wsaData;
-    WSAStartup(MAKEWORD(1, 1), &wsaData);
 
-    TDatagram dg { NULL };
-    if (_stricmp(argv[argnum], "-b") == 0) {
+    TDatagram dg;
+    memset(&dg, 0x00, sizeof(TDatagram));
+    if (strcmp(argv[argnum], "-b") == 0) {
         bBroadcast = true;
-    } else if (_stricmp(argv[argnum], "-s") == 0) {
+    } else if (strcmp(argv[argnum], "-s") == 0) {
         argnum++;
         if (argc < argnum + 1) {
             std::cerr << ("You must provide a port#.") << std::endl;
@@ -332,10 +398,10 @@ int main(int argc, char *argv[])
         nPort = getPortNumber(argv[argnum]);
         std::cout << ("Starting Datagram listener on port ") << nPort << (".") << std::endl;
         return DatagramServer(nPort);
-    } else if (_stricmp(argv[argnum], "-q") == 0) {
+    } else if (strcmp(argv[argnum], "-q") == 0) {
         argnum++;
         dg.Quit = 1;
-    } else if (_stricmp(argv[argnum], "-r") == 0) {
+    } else if (strcmp(argv[argnum], "-r") == 0) {
         argnum++;
         bRaw = true;
     }
