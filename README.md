@@ -15,4 +15,9 @@ Or you can load the included project file into Visual Studio 2017 and compile it
 g++ udputil.cpp -o udputil
 ```
 
+### Timesys Linux for the ProSoft MVI56E-LDM and MVI69E-LDM
+```
+/opt/timesys/datm3/toolchain/bin/armv5l-timesys-linux-gnueabi-g++ udputil.cpp -o udputil
+```
+
 UDPUtil will print out when it receives datagrams, but if it does not understand the datagram, it outputs it in a Hex Editor style output, that will auto-adjust to your shell's size.
