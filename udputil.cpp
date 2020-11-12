@@ -28,7 +28,7 @@
 typedef int socklen_t;
 #pragma warning(disable: 4127) // incompatible with FD_SET()
 #define MAX_COMPUTERNAME    MAX_COMPUTERNAME_LENGTH
-#pragma comment(lib, "ws2_32.lib")
+#define snprintf _snprintf
 #else
 #include <netdb.h>
 #include <signal.h>
