@@ -51,7 +51,7 @@ inline void closesocket(int x) { close(x); }
 #define  SD_BOTH                0x02
 #endif
 
-#define VERSION_INFO            1.6
+#define VERSION_INFO            1.7
 #define MAX_DATAGRAM_MESSAGE    512
 
 SOCKET  ServerSocket    = INVALID_SOCKET;
@@ -421,7 +421,7 @@ int main(int argc, char *argv[])
     }
     nPort = getPortNumber(argv[argnum++]);
 
-    if (argc < argnum+1) {
+    if (argc < argnum+1 && dg.Quit == 0) {
         std::cerr << "You must provide a payload." << std::endl;
         WSACleanup();
         return 1;
@@ -448,7 +448,7 @@ int main(int argc, char *argv[])
     }
 
     if (bRet) {
-        std::cout << "Datagram " << (bBroadcast ? "broadcast" : "sent") << " succcessfully." << std::endl;
+        std::cout << (dg.Quit ? "" : "Quit / Shutdown ") << "Datagram " << (bBroadcast ? "broadcast" : "sent") << " succcessfully." << std::endl;
     }
     WSACleanup();
     return 0;
