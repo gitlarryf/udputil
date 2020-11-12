@@ -48,10 +48,10 @@ inline void closesocket(int x) { close(x); }
 #endif
 
 #ifndef  SD_BOTH
-#define SD_BOTH         0x02
+#define  SD_BOTH                0x02
 #endif
 
-#define VERSION_INFO            1.5
+#define VERSION_INFO            1.6
 #define MAX_DATAGRAM_MESSAGE    512
 
 SOCKET  ServerSocket    = INVALID_SOCKET;
@@ -151,7 +151,7 @@ int DatagramServer(unsigned short nServerPort)
     ServerSocket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (ServerSocket == INVALID_SOCKET) {
         int err = WSAGetLastError();
-        std::cerr << ("Could not create server datagram socket.  Error: (") << err << (") - ") << getSocketError(err);
+        std::cerr << "Could not create server datagram socket.  Error: (" << err << ") - " << getSocketError(err);
         return 1;
     }
     sockaddr_in sin;
@@ -161,7 +161,7 @@ int DatagramServer(unsigned short nServerPort)
     sin.sin_addr.s_addr = INADDR_ANY;
     if (bind(ServerSocket, (sockaddr *)&sin, sizeof(sin)) != 0) {
         int err = WSAGetLastError();
-        std::cerr << ("Could not bind server datagram socket on port: ") << nServerPort <<  (".  Error: (") << err << (") - ") << getSocketError(err);
+        std::cerr << "Could not bind server datagram socket on port: " << nServerPort <<  ".  Error: (" << err << ") - " << getSocketError(err);
         return 1;
     }
 
@@ -182,38 +182,38 @@ int DatagramServer(unsigned short nServerPort)
         tv.tv_usec = 50000;
         int err = select(nfs, &rfds, NULL, &efds, &tv);
         if (err < 0 && err == EAGAIN) {
-            std::cerr << ("select() returned an error.  Error: (") << errno << (") - ") << strerror(errno);
+            std::cerr << "select() returned an error.  Error: (" << errno << ") - " << strerror(errno);
             break;
         } else if (err == 0) {
             // Ignore timeout periods now.
-            //std::cerr << ("Recv: ") << uiPacketNumber << (" valid datagrams during timeout period.") << std::endl;
+            //std::cerr << "Recv: " << uiPacketNumber << " valid datagrams during timeout period." << std::endl;
             //uiPacketNumber = 0;
             continue;
         }
         if (FD_ISSET(ServerSocket, &efds)) {
             int error = WSAGetLastError();
-            std::cerr << ("Socket exception occurred on socket.  Shutting down server.  Error: (") << error << (") - ") << getSocketError(error);
+            std::cerr << "Socket exception occurred on socket.  Shutting down server.  Error: (" << error << ") - " << getSocketError(error);
             break;
         }
         if (FD_ISSET(ServerSocket, &rfds)) {
             int r = recvfrom(ServerSocket, (char *)&datagram, sizeof(TDatagram), 0, (sockaddr *)&fin, &fromlen);
             if ((r > 0) && (r != sizeof(TDatagram))) {
-                std::cerr << ("Received ") << r << (" bytes of unknown datagram.") << std::endl;
+                std::cerr << "Received " << r << " bytes of unknown datagram." << std::endl;
                 std::cout << FormatData("PAYLOAD:", reinterpret_cast<char*>(&datagram), r, nScreenCols);
                 continue;
             } else if (r == sizeof(TDatagram)) {
                 uiPacketNumber++;
-                std::cout << ("*** DATAGRAM ***") << std::endl;
+                std::cout << "*** DATAGRAM ***" << std::endl;
                 if (datagram.Quit) {
-                    std::cout << ("--- Shutdown Datagram receieved. ---") << std::endl;
+                    std::cout << "--- Shutdown Datagram receieved. ---" << std::endl;
                 }
-                std::cout << ("IPADR: ") << inet_ntoa(fin.sin_addr) << std::endl;
-                std::cout << ("COUNT: ") << datagram.Counter << std::endl << ("WKSTN: ") << datagram.Computername << std::endl << ("PAYLD: ") << datagram.Payload << std::endl;
+                std::cout << "IPADR: " << inet_ntoa(fin.sin_addr) << std::endl;
+                std::cout << "COUNT: " << datagram.Counter << std::endl << "WKSTN: " << datagram.Computername << std::endl << "PAYLD: " << datagram.Payload << std::endl;
                 if (datagram.Quit) {
-                    std::cout << ("SHTDN: ") << (datagram.Quit ? ("TRUE") : ("FALSE")) << std::endl;
+                    std::cout << "SHTDN: " << (datagram.Quit ? "TRUE" : "FALSE") << std::endl;
                     bShutdown = true;
                 }
-                std::cout << ("*** END DGRM ***") << std::endl;
+                std::cout << "*** END DGRM ***" << std::endl;
             }
         }
         FD_CLR(ServerSocket, &rfds);
@@ -241,7 +241,7 @@ bool SendDatagram(const char *pszHostAddr, unsigned short nPort, bool bBroadcast
             bRetval = true;
         } else {
             int error = WSAGetLastError();
-            std::cerr << ("Datagram failed to ") << (bBroadcast ? ("broadcast") : ("send")) << (".  Error: (") << error << (") - ") << getSocketError(error);
+            std::cerr << "Datagram failed to " << (bBroadcast ? "broadcast" : "send") << ".  Error: (" << error << ") - " << getSocketError(error);
         }
         closesocket(s);
     }
@@ -266,7 +266,7 @@ BOOL __stdcall CtrlHandler(DWORD fdwCtrlType)
     switch (fdwCtrlType) {
         case CTRL_C_EVENT:  // Handle the CTRL+C signal.
             bShutdown = true;
-            std::cerr << std::endl << ("***** Shutting down Datagram listener...") << std::endl;
+            std::cerr << std::endl << "***** Shutting down Datagram listener..." << std::endl;
             shutdown(ServerSocket, SD_BOTH);
             closesocket(ServerSocket);
             return TRUE; 
@@ -275,20 +275,20 @@ BOOL __stdcall CtrlHandler(DWORD fdwCtrlType)
             closesocket(ServerSocket);
             Sleep(500);
             bShutdown = true;
-            std::cerr << std::endl << ("**** Closing application, shutting down Datagram listener...") << std::endl;
+            std::cerr << std::endl << "**** Closing application, shutting down Datagram listener..." << std::endl;
             return TRUE; 
         case CTRL_LOGOFF_EVENT:
             shutdown(ServerSocket, SD_BOTH);
             closesocket(ServerSocket);
             Sleep(500);
             bShutdown = true;
-            std::cerr << std::endl << ("**** User Logoff event occurred, shutting down Datagram listener.") << std::endl;
+            std::cerr << std::endl << "**** User Logoff event occurred, shutting down Datagram listener." << std::endl;
         case CTRL_SHUTDOWN_EVENT:
             shutdown(ServerSocket, SD_BOTH);
             closesocket(ServerSocket);
             Sleep(500);
             bShutdown = true;
-            std::cerr << std::endl << ("**** Windows Shutdown invoked!  Kindly closing all active threads...") << std::endl;
+            std::cerr << std::endl << "**** Windows Shutdown invoked!  Kindly closing all active threads..." << std::endl;
         case CTRL_BREAK_EVENT:
             return FALSE;   //Break out of the app, non-gracefully.
         default:
@@ -298,23 +298,23 @@ void CtrlHandler(int sig)
 {
     switch (sig) {
         case SIGQUIT:
-            std::cerr << std::endl << ("**** Dumping core...") << std::endl;
+            std::cerr << std::endl << "**** Dumping core..." << std::endl;
             break;
         case SIGTERM:
             bShutdown = true;
-            std::cerr << std::endl << ("**** Closing application, shutting down Datagram listener...") << std::endl;
+            std::cerr << std::endl << "**** Closing application, shutting down Datagram listener..." << std::endl;
             shutdown(ServerSocket, SD_BOTH);
             closesocket(ServerSocket);
             break;
         case SIGINT:
             bShutdown = true;
-            std::cerr << std::endl << ("***** Shutting down Datagram listener...") << std::endl;
+            std::cerr << std::endl << "***** Shutting down Datagram listener..." << std::endl;
             shutdown(ServerSocket, SD_BOTH);
             closesocket(ServerSocket);
             break;
         case SIGHUP:
             bShutdown = true;
-            std::cerr << std::endl << ("**** Connection to user lost, or user logoff event occurred, shutting down Datagram listener.") << std::endl;
+            std::cerr << std::endl << "**** Connection to user lost, or user logoff event occurred, shutting down Datagram listener." << std::endl;
             shutdown(ServerSocket, SD_BOTH);
             closesocket(ServerSocket);
             break;
@@ -325,7 +325,7 @@ void CtrlHandler(int sig)
 unsigned short getPortNumber(const char *port)
 {
     if (atoi(port) <= 0) {
-        std::cerr << port << (" is an invalid port number.  Port must be a positive integer between 1 and ") << USHRT_MAX << (".") << std::endl;
+        std::cerr << port << " is an invalid port number.  Port must be a positive integer between 1 and " << USHRT_MAX << "." << std::endl;
         exit(1);
     }
     return static_cast<unsigned short>(atoi(port));
@@ -369,15 +369,15 @@ int main(int argc, char *argv[])
     unsigned short nPort = 0;
 
     if (argc < 2) {
-        std::cerr << szAppName << (" - UDP Datagram Utility (C) 2018 MLinks Technologies, Inc.") << std::endl;
-        std::cerr << ("Version ") << VERSION_INFO << (" by Larry Frieson") << std::endl;
-        std::cerr << ("Usage:") << std::endl << std::endl;
-        std::cerr << ("    ") << szAppName << (" [options] ipaddr port \"payload\" counter") << std::endl;
-        std::cerr << std::endl << (" Where [options] can be one of the following:") << std::endl;
-        std::cerr << ("     -b       Send broadcast datagram on 'port'.") << std::endl;
-        std::cerr << ("     -q       Send QUIT datagram.") << std::endl;
-        std::cerr << ("     -r       Send RAW datagram.") << std::endl;
-        std::cerr << ("     -s       Start Datagram SERVER on 'port'.") << std::endl;
+        std::cerr << szAppName << " - UDP Datagram Utility (C) 2018 MLinks Technologies, Inc." << std::endl;
+        std::cerr << "Version " << VERSION_INFO << " by Larry Frieson" << std::endl;
+        std::cerr << "Usage:" << std::endl << std::endl;
+        std::cerr << "    " << szAppName << " [options] ipaddr port \"payload\" counter" << std::endl;
+        std::cerr << std::endl << " Where [options] can be one of the following:" << std::endl;
+        std::cerr << "     -b       Send broadcast datagram on 'port'." << std::endl;
+        std::cerr << "     -q       Send QUIT datagram." << std::endl;
+        std::cerr << "     -r       Send RAW datagram." << std::endl;
+        std::cerr << "     -s       Start Datagram SERVER on 'port'." << std::endl;
         std::cerr << std::endl;
         return 1;
     }
@@ -391,12 +391,12 @@ int main(int argc, char *argv[])
     } else if (strcmp(argv[argnum], "-s") == 0) {
         argnum++;
         if (argc < argnum + 1) {
-            std::cerr << ("You must provide a port#.") << std::endl;
+            std::cerr << "You must provide a port#." << std::endl;
             WSACleanup();
             return 1;
         }
         nPort = getPortNumber(argv[argnum]);
-        std::cout << ("Starting Datagram listener on port ") << nPort << (".") << std::endl;
+        std::cout << "Starting Datagram listener on port " << nPort << "." << std::endl;
         return DatagramServer(nPort);
     } else if (strcmp(argv[argnum], "-q") == 0) {
         argnum++;
@@ -408,21 +408,21 @@ int main(int argc, char *argv[])
 
 
     if (argc < argnum+1) {
-        std::cerr << ("You must provide a target IP.") << std::endl;
+        std::cerr << "You must provide a target IP." << std::endl;
         WSACleanup();
         return 1;
     }
     char *target = argv[argnum++];
 
     if (argc < argnum+1) {
-        std::cerr << ("You must provide a port#.") << std::endl;
+        std::cerr << "You must provide a port#." << std::endl;
         WSACleanup();
         return 1;
     }
     nPort = getPortNumber(argv[argnum++]);
 
     if (argc < argnum+1) {
-        std::cerr << ("You must provide a payload.") << std::endl;
+        std::cerr << "You must provide a payload." << std::endl;
         WSACleanup();
         return 1;
     }
@@ -448,7 +448,7 @@ int main(int argc, char *argv[])
     }
 
     if (bRet) {
-        std::cout << ("Datagram ") << (bBroadcast ? ("broadcast") : ("sent")) << (" succcessfully.") << std::endl;
+        std::cout << "Datagram " << (bBroadcast ? "broadcast" : "sent") << " succcessfully." << std::endl;
     }
     WSACleanup();
     return 0;
